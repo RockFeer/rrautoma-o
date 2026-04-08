@@ -221,14 +221,9 @@ hr{border:none;border-top:1px solid var(--border);margin:14px 0}
     <div class="nav-item" id="n-new"     onclick="newQuote()">    <span class="ic">➕</span> Novo Orçamento</div>
     <div class="nav-label" style="margin-top:8px">Catálogo</div>
     <div class="nav-item" id="n-catalog" onclick="go('catalog')"> <span class="ic">📦</span> Produtos e Serviços</div>
-    <div class="nav-label" style="margin-top:8px">Dados — Google Drive</div>
+    <div class="nav-label" style="margin-top:8px">Dados</div>
     <div class="nav-item" onclick="showDriveConfig()"><span class="ic">☁️</span> Configurar Drive</div>
     <div style="padding:2px 20px 8px" id="drive-status"></div>
-    <div class="nav-label" style="margin-top:4px">Dados — Arquivo Local</div>
-    <div class="nav-item" onclick="openXmlFile()">  <span class="ic">📂</span> Abrir arquivo XML</div>
-    <div class="nav-item" onclick="createXmlFile()"><span class="ic">🆕</span> Criar novo arquivo</div>
-    <div class="nav-item" onclick="unlinkXmlFile()"><span class="ic">🔓</span> Desvincular arquivo</div>
-    <div style="padding:2px 20px 8px" id="xml-status"></div>
   </nav>
   <div class="sb-foot">
     <button class="logout-btn" onclick="logout()"><span style="font-size:15px">🚪</span> Sair do Sistema</button>
@@ -278,35 +273,16 @@ const ROOMS = [
 ];
 
 // ══════════════════════════════════════════════
-//  ARMAZENAMENTO — XML LOCAL
+//  ARMAZENAMENTO — GOOGLE DRIVE + LOCALSTORAGE
 // ══════════════════════════════════════════════
-let _xmlHandle      = null; // FileSystemFileHandle ativo
-let _pendingHandle  = null; // handle aguardando gesto do usuário para reconectar
 
-// IndexedDB: persiste o handle do arquivo entre sessões do navegador
-const _IDB_NAME = 'rr_aut_db', _IDB_STORE = 'handles';
-function _openIDB() {
-  return new Promise((res, rej) => {
-    const r = indexedDB.open(_IDB_NAME, 1);
-    r.onupgradeneeded = e => e.target.result.createObjectStore(_IDB_STORE);
-    r.onsuccess = e => res(e.target.result);
-    r.onerror   = e => rej(e);
-  });
-}
-async function _persistHandle(h) {
-  const db = await _openIDB();
-  return new Promise((res,rej)=>{ const tx=db.transaction(_IDB_STORE,'readwrite'); tx.objectStore(_IDB_STORE).put(h,'xmlFile'); tx.oncomplete=res; tx.onerror=rej; });
-}
-async function _restoreHandle() {
-  try {
-    const db = await _openIDB();
-    return new Promise(res=>{ const r=db.transaction(_IDB_STORE,'readonly').objectStore(_IDB_STORE).get('xmlFile'); r.onsuccess=e=>res(e.target.result||null); r.onerror=()=>res(null); });
-  } catch(e){ return null; }
-}
-async function _clearHandle() {
-  _xmlHandle=null;
-  try{ const db=await _openIDB(); const tx=db.transaction(_IDB_STORE,'readwrite'); tx.objectStore(_IDB_STORE).delete('xmlFile'); }catch(e){}
-}
+// URL padrão do Apps Script (Google Drive)
+const _DEFAULT_DRIVE_URL = 'https://script.google.com/macros/s/AKfycbxcvzOeqA_qV1b4C7hm6MFdhWhmAEcWjrH-pBrHVsCzxkie1GJ3afD9NXa6NGgklw-4Yg/exec';
+const _DK = 'rr_drive_url'; // chave no localStorage para URL customizada
+
+function _getDriveUrl() { return localStorage.getItem(_DK) || _DEFAULT_DRIVE_URL; }
+function _setDriveUrl(url) { localStorage.setItem(_DK, url.trim()); _updateDriveStatus(); }
+function _clearDriveUrl() { localStorage.removeItem(_DK); _updateDriveStatus(); }
 
 // Serializa state → XML (dados JSON embutidos)
 function _stateToXml() {
@@ -327,37 +303,10 @@ function _xmlToState(xmlStr) {
 function load(k){ try{ return JSON.parse(localStorage.getItem(k)) }catch(e){ return null } }
 
 async function save() {
-  // sempre salva no localStorage como backup
   localStorage.setItem('ah_cat', JSON.stringify(S.catalog));
   localStorage.setItem('ah_qt',  JSON.stringify(S.quotes));
-  const xml = _stateToXml();
-  // Salva no arquivo local (se vinculado)
-  if (_xmlHandle) {
-    try {
-      const w = await _xmlHandle.createWritable();
-      await w.write(xml);
-      await w.close();
-      _updateXmlStatus('ok');
-    } catch(e) {
-      console.warn('[XML] Erro ao salvar:', e.message);
-      if (e.name === 'NotAllowedError') {
-        toast('Permissão de escrita negada. Vincule o arquivo novamente.','err');
-        await _clearHandle(); _updateXmlStatus('none');
-      }
-    }
-  }
-  // Salva no Google Drive (se configurado) — fire and forget
-  if (_getDriveUrl()) _saveToDrive(xml);
+  _saveToDrive(_stateToXml()); // fire and forget
 }
-
-// ══════════════════════════════════════════════
-//  GOOGLE DRIVE VIA APPS SCRIPT
-// ══════════════════════════════════════════════
-const _DK = 'rr_drive_url'; // localStorage key para a URL do Apps Script
-
-function _getDriveUrl() { return localStorage.getItem(_DK) || ''; }
-function _setDriveUrl(url) { localStorage.setItem(_DK, url.trim()); _updateDriveStatus(); }
-function _clearDriveUrl() { localStorage.removeItem(_DK); _updateDriveStatus(); }
 
 function _updateDriveStatus() {
   const el = document.getElementById('drive-status');
@@ -519,55 +468,6 @@ async function testDriveConnection() {
   } catch(e) { toast('❌ Falha na conexão: ' + e.message,'err'); }
 }
 
-// ─── abrir arquivo existente ───────────────────
-async function openXmlFile() {
-  if (!window.showOpenFilePicker){ toast('Use Chrome ou Edge para esta função.','err'); return; }
-  try {
-    const [h] = await window.showOpenFilePicker({ types:[{description:'Arquivo RR Automação',accept:{'text/xml':['.xml']}}], multiple:false });
-    const txt = await (await h.getFile()).text();
-    const data = _xmlToState(txt);
-    S.catalog = migrateCatalog(data.catalog);
-    S.quotes  = data.quotes || [];
-    if (data.lastSync) localStorage.setItem('ah_lastsync', data.lastSync);
-    _xmlHandle = h;
-    await _persistHandle(h);
-    _updateXmlStatus('ok');
-    await save(); render();
-    toast('Arquivo vinculado e dados carregados! ✅');
-  } catch(e){ if(e.name!=='AbortError') toast('Erro: '+e.message,'err'); }
-}
-
-// ─── criar novo arquivo ────────────────────────
-async function createXmlFile() {
-  if (!window.showSaveFilePicker){ toast('Use Chrome ou Edge para esta função.','err'); return; }
-  try {
-    const h = await window.showSaveFilePicker({ suggestedName:'rr_automacao_dados.xml', types:[{description:'Arquivo RR Automação',accept:{'text/xml':['.xml']}}] });
-    _xmlHandle = h;
-    await _persistHandle(h);
-    await save();
-    _updateXmlStatus('ok');
-    toast('Novo arquivo criado e vinculado! ✅');
-  } catch(e){ if(e.name!=='AbortError') toast('Erro: '+e.message,'err'); }
-}
-
-// ─── desvincular ───────────────────────────────
-async function unlinkXmlFile() {
-  await _clearHandle();
-  _updateXmlStatus('none');
-  toast('Arquivo desvinculado. Dados continuam salvos localmente.');
-}
-
-// ─── indicador visual ──────────────────────────
-function _updateXmlStatus(state) {
-  const el = document.getElementById('xml-status');
-  if (!el) return;
-  if (state==='ok' && _xmlHandle)
-    el.innerHTML = `<span style="font-size:11px;color:#6ee7b7">📂 ${_xmlHandle.name}</span>`;
-  else if (state==='checking')
-    el.innerHTML = `<span style="font-size:11px;color:rgba(195,216,244,.5)">⏳ Verificando…</span>`;
-  else
-    el.innerHTML = `<span style="font-size:11px;color:#fbbf24">⚠️ Sem arquivo vinculado</span>`;
-}
 
 // Migração: remove produtos padrão antigos, garante serviços padrão presentes
 function migrateCatalog(stored) {
@@ -898,7 +798,8 @@ function renderQD(q){
 // ══════════════════════════════════════════════
 //  QUOTE HTML (preview + PDF)
 // ══════════════════════════════════════════════
-function genQHTML(q){
+function genQHTML(q, opts={}){
+  const forPDF = opts.forPDF || false;
   const sub=qSubtotal(q);
   const disc=sub*(q.discount/100);
   const tot=sub-disc;
@@ -949,6 +850,7 @@ function genQHTML(q){
           <th style="padding:7px 12px;text-align:center;font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280">Qtd</th>
           <th style="padding:7px 12px;text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280">Unit.</th>
           <th style="padding:7px 12px;text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280">Total</th>
+          ${!forPDF?`<th style="padding:7px 12px;text-align:center;font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280">Link</th>`:''}
         </tr></thead>
         <tbody>${r.items.map(it=>`
           <tr style="border-top:1px solid #e5e7eb">
@@ -957,6 +859,7 @@ function genQHTML(q){
             <td style="padding:7px 12px;text-align:center">${it.qty} ${it.unit}</td>
             <td style="padding:7px 12px;text-align:right">${fmt(it.price)}</td>
             <td style="padding:7px 12px;text-align:right;font-weight:700">${fmt(it.price*it.qty)}</td>
+            ${!forPDF?`<td style="padding:7px 12px;text-align:center">${it.ekazaHandle?`<a href="https://shop.ekaza.com.br/products/${it.ekazaHandle}" target="_blank" title="Ver produto na Ekaza" style="display:inline-flex;align-items:center;gap:4px;background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;border-radius:6px;padding:3px 9px;font-size:11px;font-weight:700;text-decoration:none">🔗 Ekaza</a>`:'<span style="color:#d1d5db;font-size:11px">—</span>'}</td>`:''}
           </tr>`).join('')}
         </tbody>
       </table>
@@ -1387,7 +1290,7 @@ async function expPDF(qid){
   toast('Gerando PDF...');
   const d=document.createElement('div');
   d.style.cssText='width:720px;padding:22px;background:#fff;font-family:Segoe UI,sans-serif';
-  d.innerHTML=genQHTML(q);
+  d.innerHTML=genQHTML(q, {forPDF:true});
   document.body.appendChild(d);
   const opt={
     margin:[8,8],
@@ -1796,97 +1699,17 @@ function _checkSessionExpiry() {
 }
 
 // Carrega os dados de um handle para S.catalog / S.quotes
-async function _loadHandleData(handle) {
-  const txt  = await (await handle.getFile()).text();
-  const data = _xmlToState(txt);
-  S.catalog  = migrateCatalog(data.catalog);
-  S.quotes   = data.quotes || [];
-  if (data.lastSync) localStorage.setItem('ah_lastsync', data.lastSync);
-}
-
-// Mostra banner no topo do conteúdo pedindo ao usuário para reconectar
-function _showReconnectBanner() {
-  // injeta após render(), então precisa esperar o DOM
-  requestAnimationFrame(() => {
-    const content = document.getElementById('content');
-    if (!content || document.getElementById('xml-reconnect-banner')) return;
-    const b = document.createElement('div');
-    b.id = 'xml-reconnect-banner';
-    b.style.cssText = 'background:#fef3c7;border:1px solid #f59e0b;border-radius:10px;padding:12px 16px;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:13px;color:#92400e';
-    b.innerHTML = `<div>📂 <strong>Arquivo XML vinculado detectado.</strong> Clique para recarregar os dados salvos.</div>
-      <button onclick="_reconnectXml()" style="background:#f59e0b;color:#fff;border:none;padding:8px 16px;border-radius:7px;font-weight:700;cursor:pointer;white-space:nowrap">🔗 Reconectar arquivo</button>`;
-    content.insertBefore(b, content.firstChild);
-  });
-}
-
-// Chamado pelo usuário (gesto humano) para reconectar o arquivo pendente
-async function _reconnectXml() {
-  if (!_pendingHandle) return;
-  try {
-    const granted = await _pendingHandle.requestPermission({ mode: 'readwrite' });
-    if (granted === 'granted') {
-      await _loadHandleData(_pendingHandle);
-      _xmlHandle    = _pendingHandle;
-      _pendingHandle = null;
-      _updateXmlStatus('ok');
-      await save(); render();
-      const b = document.getElementById('xml-reconnect-banner');
-      if (b) b.remove();
-      toast('Arquivo XML reconectado e dados carregados! ✅');
-    } else {
-      toast('Permissão negada. Use "Abrir arquivo XML" no menu.', 'err');
-    }
-  } catch(e) { toast('Erro ao reconectar: ' + e.message, 'err'); }
-}
-
 async function _initApp() {
   _checkSessionExpiry();
-  _updateXmlStatus('checking');
   _updateDriveStatus();
 
-  let dataLoaded = false;
-
-  // 1ª prioridade: Google Drive (compartilhado entre usuários)
-  if (_getDriveUrl()) {
-    try {
-      const ok = await _loadFromDrive();
-      if (ok) {
-        dataLoaded = true;
-        toast('☁️ Dados carregados do Google Drive.', 'ok');
-      }
-    } catch(e) { console.warn('[Drive] Falha no carregamento inicial:', e.message); }
-  }
-
-  // 2ª prioridade: arquivo XML local (se Drive não carregou)
-  if (!dataLoaded) {
-    const saved = await _restoreHandle();
-    if (saved) {
-      try {
-        const perm = await saved.queryPermission({ mode: 'readwrite' });
-        if (perm === 'granted') {
-          await _loadHandleData(saved);
-          _xmlHandle = saved;
-          _updateXmlStatus('ok');
-          dataLoaded = true;
-        } else if (perm === 'prompt') {
-          // Precisa de gesto humano — mostra banner
-          _pendingHandle = saved;
-          _updateXmlStatus('none');
-        } else {
-          await _clearHandle();
-          _updateXmlStatus('none');
-        }
-      } catch(e) {
-        console.warn('[XML] Erro ao verificar handle:', e.message);
-        _updateXmlStatus('none');
-      }
-    } else {
-      _updateXmlStatus('none');
-    }
-  }
+  // Carrega do Google Drive (URL padrão ou customizada)
+  try {
+    const ok = await _loadFromDrive();
+    if (ok) toast('☁️ Dados carregados do Google Drive.', 'ok');
+  } catch(e) { console.warn('[Drive] Falha no carregamento inicial:', e.message); }
 
   render();
-  if (_pendingHandle) _showReconnectBanner();
 
   // Exibe data da última sincronização Ekaza
   const ls = localStorage.getItem('ah_lastsync');
