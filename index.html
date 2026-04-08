@@ -2,7 +2,12 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#1e3a5f">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="RR Automação">
 <title>RR Automação — Sistema de Orçamentos</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 <style>
@@ -180,6 +185,169 @@ hr{border:none;border-top:1px solid var(--border);margin:14px 0}
 .sb-foot{padding:12px 0;border-top:1px solid rgba(255,255,255,.1);margin-top:auto}
 .logout-btn{display:flex;align-items:center;gap:10px;padding:10px 20px;cursor:pointer;color:rgba(195,216,244,.7);font-size:14px;width:100%;background:none;border:none;transition:all .15s}
 .logout-btn:hover{background:rgba(255,255,255,.05);color:#fff}
+
+/* ── STEP NAV ── */
+.step-nav{display:flex;align-items:center;justify-content:space-between;margin-top:14px;gap:8px;flex-wrap:wrap}
+
+/* ── HAMBURGER ── */
+.menu-btn{display:none;width:40px;height:40px;border:none;background:transparent;font-size:22px;cursor:pointer;border-radius:8px;color:var(--text);align-items:center;justify-content:center;flex-shrink:0;transition:background .15s}
+.menu-btn:active{background:var(--bg)}
+
+/* ── SIDEBAR CLOSE (mobile) ── */
+.sb-close{display:none;position:absolute;top:14px;right:14px;width:34px;height:34px;border:none;background:rgba(255,255,255,.12);color:#fff;border-radius:50%;font-size:18px;cursor:pointer;align-items:center;justify-content:center}
+
+/* ── SIDEBAR OVERLAY ── */
+#sb-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.52);z-index:99;cursor:pointer}
+#sb-overlay.show{display:block}
+
+/* ── BOTTOM NAV ── */
+#bottom-nav{display:none;position:fixed;bottom:0;left:0;right:0;height:62px;background:#fff;border-top:1px solid var(--border);z-index:150;padding:0;padding-bottom:env(safe-area-inset-bottom)}
+.bnav-item{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;border:none;background:transparent;cursor:pointer;color:var(--muted);font-size:10px;font-weight:600;padding:6px 2px;transition:color .15s;min-height:62px;-webkit-tap-highlight-color:transparent}
+.bnav-item .bi{font-size:20px;line-height:1}
+.bnav-item.active{color:var(--primary)}
+.bnav-item.active .bi{transform:scale(1.1)}
+.bnav-new{background:var(--primary);border-radius:14px;color:#fff !important;margin:6px 4px;height:50px;min-height:50px;flex:0 0 56px;box-shadow:0 4px 14px rgba(26,86,219,.35)}
+.bnav-new .bi{font-size:22px}
+
+/* ════════════════════════════════════════
+   RESPONSIVE — MOBILE (≤ 767px)
+   ════════════════════════════════════════ */
+@media (max-width:767px){
+  /* show hamburger + bottom nav, hide sidebar by default */
+  .menu-btn{display:inline-flex}
+  .sb-close{display:inline-flex}
+  #bottom-nav{display:flex}
+
+  /* sidebar becomes full-height drawer */
+  #sidebar{transform:translateX(-100%);position:fixed;width:280px;z-index:200;transition:transform .28s cubic-bezier(.4,0,.2,1)}
+  #sidebar.open{transform:translateX(0)}
+  #sidebar{position:fixed} /* ensure */
+
+  /* main: no left indent, space for bottom nav */
+  #main{margin-left:0;padding-bottom:70px}
+  body{display:block}
+
+  /* topbar compact */
+  .topbar{padding:10px 14px;gap:8px}
+  .topbar h2{font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px}
+
+  /* content padding */
+  .content{padding:14px}
+
+  /* grids collapse to 1 col */
+  .g2,.g3,.g4{grid-template-columns:1fr !important}
+  .fr{grid-template-columns:1fr !important}
+
+  /* larger touch targets */
+  .btn{min-height:44px;font-size:14px}
+  .btn-sm{min-height:36px;font-size:13px}
+  input,select,textarea{font-size:16px !important;padding:11px 13px} /* 16px prevents iOS zoom */
+  .qty-btn{width:36px;height:36px;font-size:18px}
+  .qty-inp{width:46px;height:36px;font-size:15px}
+
+  /* cards */
+  .card{padding:16px;border-radius:10px}
+  .scard{padding:14px}
+  .scard-val{font-size:22px}
+
+  /* modals → bottom sheets */
+  .overlay{align-items:flex-end;padding:0;background:rgba(0,0,0,.5)}
+  .modal{border-radius:20px 20px 0 0;max-width:100%;max-height:92vh;width:100%;margin:0}
+  .modal-lg{max-width:100%}
+  .mhd{padding:16px 18px;position:sticky;top:0;background:#fff;z-index:1}
+  .mhd::before{content:'';display:block;width:40px;height:4px;background:#d1d5db;border-radius:2px;margin:0 auto 12px}
+  .mbody{padding:16px 18px}
+  .mfoot{padding:12px 18px;flex-wrap:wrap}
+  .mfoot .btn{flex:1;justify-content:center;min-width:120px}
+
+  /* steps: compact on mobile */
+  .step-l{display:none}
+  .steps{gap:4px}
+  .step-n{width:26px;height:26px;font-size:12px}
+
+  /* tables: horizontal scroll */
+  .card:has(.qt){padding:0;overflow:hidden}
+  .qt-wrap,.table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .qt{min-width:480px}
+
+  /* toast above bottom nav */
+  .toast-wrap{bottom:72px;right:12px;left:12px}
+  .toast{text-align:center}
+
+  /* step nav: sticky at bottom on mobile */
+  .step-nav{
+    position:sticky;bottom:70px;
+    background:#fff;
+    margin:14px -14px -14px;
+    padding:12px 14px;
+    border-top:1px solid var(--border);
+    box-shadow:0 -4px 16px rgba(0,0,0,.06);
+    z-index:10;
+    border-radius:0;
+  }
+  .step-nav .btn{flex:1;justify-content:center}
+
+  /* preview card: scrollable */
+  #qprev{overflow-x:auto;-webkit-overflow-scrolling:touch}
+
+  /* room cards: 1 col on mobile */
+  .g2.mb3{grid-template-columns:1fr}
+
+  /* topbar: show action text only on wider mobile */
+  @media (max-width:390px){
+    .topbar h2{max-width:140px;font-size:14px}
+  }
+
+  /* room chip: full width scroll */
+  .rchip-wrap{display:flex;flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:6px;gap:8px}
+  .rchip{white-space:nowrap;flex-shrink:0}
+
+  /* category filter: horizontal scroll */
+  .cat-filter{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:4px}
+  .cat-btn{white-space:nowrap;flex-shrink:0;min-height:36px;padding:6px 14px}
+
+  /* quote detail actions: stack */
+  #qd-actions{flex-wrap:wrap;gap:8px}
+  #qd-actions .btn{flex:1;min-width:140px;justify-content:center}
+
+  /* topbar actions: icon-only on small screens */
+  .topbar-act .btn span:not(.ic){display:none}
+
+  /* item card in room modal */
+  .pcard{padding:10px}
+  .picon{width:42px;height:42px;font-size:18px}
+
+  /* catalog icard: 2 cols on mobile */
+  .icard-grid{grid-template-columns:1fr 1fr !important}
+  .icard-img{height:90px}
+
+  /* stat cards: 2x2 */
+  .stats-grid{grid-template-columns:1fr 1fr !important}
+
+  /* login */
+  .login-box{border-radius:18px;padding:32px 24px;margin:16px}
+}
+
+/* ════════════════════════════════════════
+   RESPONSIVE — TABLET (768px–1023px)
+   ════════════════════════════════════════ */
+@media (min-width:768px) and (max-width:1023px){
+  #sidebar{width:200px}
+  #main{margin-left:200px}
+  .g4{grid-template-columns:repeat(2,1fr)}
+  .g3{grid-template-columns:repeat(2,1fr)}
+  .content{padding:18px}
+}
+
+/* ════════════════════════════════════════
+   ACTIVE STATES (substitutes hover on touch)
+   ════════════════════════════════════════ */
+@media (hover:none){
+  .btn:active{filter:brightness(.88)}
+  .nav-item:active{background:rgba(255,255,255,.08)}
+  .pcard:active{border-color:var(--primary);background:#f0f7ff}
+  .rcard:active{box-shadow:0 2px 8px rgba(0,0,0,.1)}
+}
 </style>
 </head>
 <body>
@@ -210,6 +378,7 @@ hr{border:none;border-top:1px solid var(--border);margin:14px 0}
 
 <!-- SIDEBAR -->
 <div id="sidebar">
+  <button class="sb-close" onclick="closeSidebar()">✕</button>
   <div class="sb-logo">
     <h1>🏠 RR Automação</h1>
     <p>Automação Residencial</p>
@@ -230,14 +399,39 @@ hr{border:none;border-top:1px solid var(--border);margin:14px 0}
   </div>
 </div>
 
+<!-- SIDEBAR OVERLAY (mobile tap-to-close) -->
+<div id="sb-overlay" onclick="closeSidebar()"></div>
+
 <!-- MAIN -->
 <div id="main">
   <div class="topbar">
-    <h2 id="pg-title">Dashboard</h2>
+    <div style="display:flex;align-items:center;gap:8px;min-width:0">
+      <button class="menu-btn" onclick="toggleSidebar()" aria-label="Menu">☰</button>
+      <h2 id="pg-title">Dashboard</h2>
+    </div>
     <div class="topbar-act" id="pg-actions"></div>
   </div>
   <div class="content" id="content"></div>
 </div>
+
+<!-- BOTTOM NAV (mobile only) -->
+<nav id="bottom-nav">
+  <button class="bnav-item" id="bn-home" onclick="go('home')">
+    <span class="bi">📊</span><span>Dashboard</span>
+  </button>
+  <button class="bnav-item" id="bn-quotes" onclick="go('quotes')">
+    <span class="bi">📄</span><span>Orçamentos</span>
+  </button>
+  <button class="bnav-item bnav-new" onclick="newQuote()">
+    <span class="bi">➕</span><span>Novo</span>
+  </button>
+  <button class="bnav-item" id="bn-catalog" onclick="go('catalog')">
+    <span class="bi">📦</span><span>Catálogo</span>
+  </button>
+  <button class="bnav-item" onclick="toggleSidebar()">
+    <span class="bi">☰</span><span>Menu</span>
+  </button>
+</nav>
 
 <div class="toast-wrap" id="toasts"></div>
 <div id="modals"></div>
@@ -490,10 +684,35 @@ let S = {
 // ══════════════════════════════════════════════
 //  NAVIGATION
 // ══════════════════════════════════════════════
+// ── SIDEBAR MOBILE ─────────────────────────────
+function toggleSidebar(){
+  const sb=document.getElementById('sidebar');
+  const ov=document.getElementById('sb-overlay');
+  const open=sb.classList.toggle('open');
+  ov.classList.toggle('show',open);
+  if(open) document.body.style.overflow='hidden';
+  else     document.body.style.overflow='';
+}
+function closeSidebar(){
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('sb-overlay').classList.remove('show');
+  document.body.style.overflow='';
+}
+
+// ── NAVIGATION ─────────────────────────────────
 function go(view, params={}){
   S.view=view; Object.assign(S,params); render();
+  // sidebar nav active
   document.querySelectorAll('.nav-item').forEach(e=>e.classList.remove('active'));
   const el=document.getElementById('n-'+view); if(el) el.classList.add('active');
+  // bottom nav active
+  document.querySelectorAll('.bnav-item').forEach(e=>e.classList.remove('active'));
+  const bn=document.getElementById('bn-'+view); if(bn) bn.classList.add('active');
+  // close sidebar on mobile nav
+  closeSidebar();
+  // scroll to top
+  document.getElementById('content')?.scrollTo(0,0);
+  window.scrollTo(0,0);
 }
 
 function newQuote(){
@@ -537,7 +756,7 @@ function renderHome(){
   const val=S.quotes.reduce((s,q)=>s+qTotal(q),0);
   const drft=S.quotes.filter(q=>q.status==='draft').length;
   return `
-  <div class="g4" style="margin-bottom:20px">
+  <div class="g4 stats-grid" style="margin-bottom:20px">
     <div class="scard"><div class="scard-label">Total Orçamentos</div><div class="scard-val">${tot}</div><div class="scard-sub">orçamentos criados</div></div>
     <div class="scard"><div class="scard-label">Valor Total</div><div class="scard-val" style="font-size:20px">${fmt(val)}</div><div class="scard-sub">em orçamentos</div></div>
     <div class="scard"><div class="scard-label">Em Rascunho</div><div class="scard-val">${drft}</div><div class="scard-sub">aguardando envio</div></div>
@@ -559,21 +778,22 @@ function renderHome(){
   <!-- Ekaza sync status bar -->
   <div id="ekaza-bar" style="display:none"></div>
   ${S.quotes.length?`
-  <div class="card">
-    <div class="card-hd"><h3>Orçamentos Recentes</h3><button class="btn btn-ghost btn-sm" onclick="go('quotes')">Ver todos →</button></div>
+  <div class="card" style="padding:0;overflow:hidden">
+    <div class="card-hd" style="padding:14px 18px"><h3>Orçamentos Recentes</h3><button class="btn btn-ghost btn-sm" onclick="go('quotes')">Ver todos →</button></div>
+    <div class="qt-wrap">
     <table class="qt">
-      <thead><tr><th>Nº</th><th>Cliente</th><th>Data</th><th>Cômodos</th><th>Total</th><th>Status</th><th></th></tr></thead>
+      <thead><tr><th>Nº</th><th>Cliente</th><th>Data</th><th>Total</th><th>Status</th><th></th></tr></thead>
       <tbody>${[...S.quotes].reverse().slice(0,6).map(q=>`
         <tr>
           <td><span class="fw7" style="color:var(--primary)">#${q.number}</span></td>
           <td>${q.client.name||'<em class="tm">Sem nome</em>'}</td>
           <td>${fmtD(q.date)}</td>
-          <td>${q.rooms.length}</td>
           <td class="fw7">${fmt(qTotal(q))}</td>
           <td>${stBadge(q.status)}</td>
-          <td><button class="btn btn-outline btn-sm" onclick="viewQ('${q.id}')">👁 Ver</button></td>
+          <td><button class="btn btn-outline btn-sm" onclick="viewQ('${q.id}')">👁</button></td>
         </tr>`).join('')}</tbody>
     </table>
+    </div>
   </div>`:``}`;
 }
 
@@ -587,16 +807,15 @@ function renderQuotes(){
     <button class="btn btn-primary" onclick="newQuote()">➕ Novo Orçamento</button>
   </div>
   <div class="card" style="padding:0;overflow:hidden">
+    <div class="qt-wrap">
     <table class="qt">
-      <thead><tr><th>Nº</th><th>Cliente</th><th>Cidade</th><th>Data</th><th>Cômodos</th><th>Itens</th><th>Total</th><th>Status</th><th>Ações</th></tr></thead>
+      <thead><tr><th>Nº</th><th>Cliente</th><th>Cidade</th><th>Data</th><th>Total</th><th>Status</th><th>Ações</th></tr></thead>
       <tbody>${[...S.quotes].reverse().map(q=>`
         <tr>
           <td><span class="fw7" style="color:var(--primary)">#${q.number}</span></td>
           <td>${q.client.name||'<em class="tm">—</em>'}</td>
           <td>${q.client.city||'—'}</td>
           <td>${fmtD(q.date)}</td>
-          <td>${q.rooms.length}</td>
-          <td>${q.rooms.reduce((s,r)=>s+cntItems(r),0)}</td>
           <td class="fw7">${fmt(qTotal(q))}</td>
           <td>${stBadge(q.status)}</td>
           <td><div style="display:flex;gap:5px">
@@ -608,6 +827,7 @@ function renderQuotes(){
         </tr>`).join('')}
       </tbody>
     </table>
+    </div>
   </div>`;
 }
 
@@ -649,9 +869,9 @@ function stepClient(){
       <div class="fg"><label>Endereço</label><input value="${c.address}" placeholder="Rua, número, bairro" oninput="S.curQ.client.address=this.value"></div>
       <div class="fg"><label>Cidade / Estado</label><input value="${c.city}" placeholder="São Paulo / SP" oninput="S.curQ.client.city=this.value"></div>
     </div>
-    <div style="display:flex;justify-content:space-between;margin-top:6px">
+    <div class="step-nav">
       <button class="btn btn-outline" onclick="go('home')">Cancelar</button>
-      <button class="btn btn-primary" onclick="toStep(1)">Próximo: Cômodos →</button>
+      <button class="btn btn-primary" onclick="toStep(1)">Próximo →</button>
     </div>
   </div>`;
 }
@@ -684,7 +904,7 @@ function stepRooms(){
       </div>`}
       <div style="border-top:1px solid var(--border);padding-top:14px;margin-top:6px">
         <p class="ts tm mb2">💡 Sugestões rápidas:</p>
-        <div style="display:flex;flex-wrap:wrap;gap:7px">${sugs.map(s=>`
+        <div class="rchip-wrap">${sugs.map(s=>`
           <button class="rchip" onclick="addQRoom('${s.name}','${s.emoji}')">${s.emoji} ${s.name}</button>`).join('')}
         </div>
       </div>
@@ -705,9 +925,9 @@ function stepRooms(){
         <textarea placeholder="Validade, forma de pagamento, prazo de entrega..." oninput="S.curQ.notes=this.value">${S.curQ.notes}</textarea>
       </div>
     </div>`:''}
-    <div style="display:flex;justify-content:space-between;margin-top:6px">
+    <div class="step-nav">
       <button class="btn btn-outline" onclick="toStep(0)">← Voltar</button>
-      <button class="btn btn-primary" onclick="toStep(2)">Revisar Orçamento →</button>
+      <button class="btn btn-primary" onclick="toStep(2)">Revisar →</button>
     </div>
   </div>`;
 }
@@ -719,13 +939,15 @@ function stepPreview(){
         <h3>${S.isEditing?'✏️ Revisão das Alterações':'✅ Revisão do Orçamento'}</h3>
         <p class="ts tm">${S.isEditing?`Editando #${S.curQ.number} — confira e salve.`:'Confira antes de salvar.'}</p>
       </div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <div class="step-nav">
         <button class="btn btn-outline" onclick="toStep(1)">← Voltar</button>
-        ${S.isEditing
-          ? `<button class="btn btn-outline btn-sm" style="border-color:#f59e0b;color:#92400e" onclick="S.isEditing=false;viewQ('${S.curQ.id}')">↩ Cancelar</button>`
-          : ''}
-        <button class="btn btn-secondary" onclick="saveQ()">💾 ${S.isEditing?'Salvar Alterações':'Salvar'}</button>
-        <button class="btn btn-primary" onclick="saveAndExp()">📄 Salvar e Exportar PDF</button>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          ${S.isEditing
+            ? `<button class="btn btn-outline btn-sm" style="border-color:#f59e0b;color:#92400e" onclick="S.isEditing=false;viewQ('${S.curQ.id}')">↩ Cancelar</button>`
+            : ''}
+          <button class="btn btn-secondary" onclick="saveQ()">💾 ${S.isEditing?'Salvar':'Salvar'}</button>
+          <button class="btn btn-primary" onclick="saveAndExp()">📄 PDF</button>
+        </div>
       </div>
     </div>
     <div id="qprev">${genQHTML(S.curQ)}</div>
@@ -758,7 +980,7 @@ function renderCatalog(){
   </div>
   <div class="cat-filter">${cats.map(c=>`<button class="cat-btn ${c===S.catCat?'active':''}" onclick="S.catCat='${c}';render()">${c}</button>`).join('')}</div>
   ${!filtered.length?`<div class="empty"><div class="ei">🔍</div><h3>Nenhum item encontrado</h3><p>Tente outra busca ou adicione um novo item.</p></div>`:`
-  <div class="g4">${filtered.map(item=>`
+  <div class="g4 icard-grid">${filtered.map(item=>`
     <div class="icard">
       <div class="icard-img">${item.img?`<img src="${item.img}" alt="">`:`<span>${item.emoji||(item.type==='service'?'⚙️':'📦')}</span>`}</div>
       <div class="icard-body">
@@ -781,16 +1003,16 @@ function renderCatalog(){
 function renderQD(q){
   if(!q) return '<p>Orçamento não encontrado.</p>';
   return `
-  <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center">
+  <div id="qd-actions" style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center">
     <button class="btn btn-outline" onclick="go('quotes')">← Voltar</button>
-    <button class="btn btn-primary" onclick="editQ('${q.id}')">✏️ Editar Orçamento</button>
+    <button class="btn btn-primary" onclick="editQ('${q.id}')">✏️ Editar</button>
     <select class="btn btn-outline" style="cursor:pointer" onchange="chSt('${q.id}',this.value)">
       <option value="draft" ${q.status==='draft'?'selected':''}>📝 Rascunho</option>
       <option value="sent" ${q.status==='sent'?'selected':''}>📤 Enviado</option>
       <option value="approved" ${q.status==='approved'?'selected':''}>✅ Aprovado</option>
       <option value="rejected" ${q.status==='rejected'?'selected':''}>❌ Recusado</option>
     </select>
-    <button class="btn btn-outline" onclick="expPDF('${q.id}')">📄 Exportar PDF</button>
+    <button class="btn btn-outline" onclick="expPDF('${q.id}')">📄 PDF</button>
   </div>
   <div class="card" id="qd-${q.id}">${genQHTML(q)}</div>`;
 }
@@ -843,7 +1065,8 @@ function genQHTML(q, opts={}){
         <strong style="font-size:14px">${r.emoji||'🏠'} ${r.name}</strong>
         <span style="font-weight:700">${fmt(rTotal(r))}</span>
       </div>
-      <table style="width:100%;border-collapse:collapse;font-size:12px">
+      <div style="overflow-x:auto;-webkit-overflow-scrolling:touch">
+      <table style="width:100%;min-width:480px;border-collapse:collapse;font-size:12px">
         <thead><tr style="background:#f9fafb">
           <th style="padding:7px 12px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280">Item</th>
           <th style="padding:7px 12px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;color:#6b7280">Tipo</th>
@@ -863,6 +1086,7 @@ function genQHTML(q, opts={}){
           </tr>`).join('')}
         </tbody>
       </table>
+      </div>
     </div>`).join('')}
     <!-- Totais -->
     <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:14px;margin-bottom:14px">
@@ -1070,7 +1294,7 @@ function openRoomItems(ri) {
     <div id="ri-cats" class="cat-filter" style="margin-bottom:12px">
       ${cats.map(c => `<button class="cat-btn ${c==='Todos'?'active':''}" onclick="window._msetcat('${c.replace(/'/g,"\\'")}',this)">${c}</button>`).join('')}
     </div>
-    <div id="ri-list" style="display:flex;flex-direction:column;gap:8px;max-height:380px;overflow-y:auto;padding-right:4px"></div>
+    <div id="ri-list" style="display:flex;flex-direction:column;gap:8px;max-height:min(380px,55vh);overflow-y:auto;padding-right:4px;-webkit-overflow-scrolling:touch"></div>
   </div>
   <div class="mfoot">
     <button class="btn btn-outline" onclick="closeModal();render()">Fechar</button>
