@@ -221,11 +221,14 @@ hr{border:none;border-top:1px solid var(--border);margin:14px 0}
     <div class="nav-item" id="n-new"     onclick="newQuote()">    <span class="ic">➕</span> Novo Orçamento</div>
     <div class="nav-label" style="margin-top:8px">Catálogo</div>
     <div class="nav-item" id="n-catalog" onclick="go('catalog')"> <span class="ic">📦</span> Produtos e Serviços</div>
-    <div class="nav-label" style="margin-top:8px">Dados</div>
+    <div class="nav-label" style="margin-top:8px">Dados — Google Drive</div>
+    <div class="nav-item" onclick="showDriveConfig()"><span class="ic">☁️</span> Configurar Drive</div>
+    <div style="padding:2px 20px 8px" id="drive-status"></div>
+    <div class="nav-label" style="margin-top:4px">Dados — Arquivo Local</div>
     <div class="nav-item" onclick="openXmlFile()">  <span class="ic">📂</span> Abrir arquivo XML</div>
     <div class="nav-item" onclick="createXmlFile()"><span class="ic">🆕</span> Criar novo arquivo</div>
-    <div class="nav-item" onclick="unlinkXmlFile()"><span class="ic">🔗</span> Desvincular arquivo</div>
-    <div style="padding:6px 20px 10px" id="xml-status"></div>
+    <div class="nav-item" onclick="unlinkXmlFile()"><span class="ic">🔓</span> Desvincular arquivo</div>
+    <div style="padding:2px 20px 8px" id="xml-status"></div>
   </nav>
   <div class="sb-foot">
     <button class="logout-btn" onclick="logout()"><span style="font-size:15px">🚪</span> Sair do Sistema</button>
@@ -327,19 +330,193 @@ async function save() {
   // sempre salva no localStorage como backup
   localStorage.setItem('ah_cat', JSON.stringify(S.catalog));
   localStorage.setItem('ah_qt',  JSON.stringify(S.quotes));
-  if (!_xmlHandle) return;
-  try {
-    const w = await _xmlHandle.createWritable();
-    await w.write(_stateToXml());
-    await w.close();
-    _updateXmlStatus('ok');
-  } catch(e) {
-    console.warn('[XML] Erro ao salvar:', e.message);
-    if (e.name === 'NotAllowedError') {
-      toast('Permissão de escrita negada. Vincule o arquivo novamente.','err');
-      await _clearHandle(); _updateXmlStatus('none');
+  const xml = _stateToXml();
+  // Salva no arquivo local (se vinculado)
+  if (_xmlHandle) {
+    try {
+      const w = await _xmlHandle.createWritable();
+      await w.write(xml);
+      await w.close();
+      _updateXmlStatus('ok');
+    } catch(e) {
+      console.warn('[XML] Erro ao salvar:', e.message);
+      if (e.name === 'NotAllowedError') {
+        toast('Permissão de escrita negada. Vincule o arquivo novamente.','err');
+        await _clearHandle(); _updateXmlStatus('none');
+      }
     }
   }
+  // Salva no Google Drive (se configurado) — fire and forget
+  if (_getDriveUrl()) _saveToDrive(xml);
+}
+
+// ══════════════════════════════════════════════
+//  GOOGLE DRIVE VIA APPS SCRIPT
+// ══════════════════════════════════════════════
+const _DK = 'rr_drive_url'; // localStorage key para a URL do Apps Script
+
+function _getDriveUrl() { return localStorage.getItem(_DK) || ''; }
+function _setDriveUrl(url) { localStorage.setItem(_DK, url.trim()); _updateDriveStatus(); }
+function _clearDriveUrl() { localStorage.removeItem(_DK); _updateDriveStatus(); }
+
+function _updateDriveStatus() {
+  const el = document.getElementById('drive-status');
+  if (!el) return;
+  el.innerHTML = _getDriveUrl()
+    ? `<span style="font-size:11px;color:#6ee7b7">☁️ Google Drive vinculado</span>`
+    : `<span style="font-size:11px;color:rgba(195,216,244,.4)">☁️ Drive não configurado</span>`;
+}
+
+async function _loadFromDrive() {
+  const url = _getDriveUrl();
+  if (!url) return false;
+  try {
+    const res = await fetch(url + (url.includes('?')?'&':'?') + '_nc=' + Date.now(), { cache:'no-store' });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const txt = await res.text();
+    if (!txt.trim() || txt === 'ok' || txt === '{"status":"ok"}') return false; // vazio
+    const data = _xmlToState(txt);
+    S.catalog = migrateCatalog(data.catalog);
+    S.quotes  = data.quotes || [];
+    if (data.lastSync) localStorage.setItem('ah_lastsync', data.lastSync);
+    return true;
+  } catch(e) {
+    console.warn('[Drive] Erro ao carregar:', e.message);
+    return false;
+  }
+}
+
+async function _saveToDrive(xmlContent) {
+  const url = _getDriveUrl();
+  if (!url) return;
+  try {
+    // mode:'no-cors' evita problemas de preflight — POST vai, mas não lemos resposta
+    await fetch(url, {
+      method: 'POST',
+      mode:   'no-cors',
+      headers: { 'Content-Type': 'text/plain' },
+      body:   xmlContent
+    });
+  } catch(e) { console.warn('[Drive] Erro ao salvar:', e.message); }
+}
+
+// Modal de configuração do Google Drive
+function showDriveConfig() {
+  const cur = _getDriveUrl();
+  modal(`
+  <div class="mhd"><h3>☁️ Integrar Google Drive</h3><button class="mclose" onclick="closeModal()">✕</button></div>
+  <div class="mbody" style="font-size:13px">
+
+    <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:9px;padding:14px;margin-bottom:18px">
+      <strong style="color:#1d4ed8;font-size:13px">Como funciona:</strong>
+      <p style="margin-top:6px;color:#1e3a8a;line-height:1.6">
+        Você cria um pequeno script no Google Drive que serve como ponte entre o sistema e um arquivo XML salvo na sua conta. Todos que tiverem a URL do script conseguem ler e salvar os orçamentos.
+      </p>
+    </div>
+
+    <div style="margin-bottom:18px">
+      <div style="font-weight:700;margin-bottom:10px;color:var(--text)">📋 Passo a passo:</div>
+
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <div style="background:#f9fafb;border:1px solid var(--border);border-radius:8px;padding:12px">
+          <div style="font-weight:700;margin-bottom:6px">1. Abrir Google Apps Script</div>
+          <p>Acesse <a href="https://script.google.com" target="_blank" style="color:var(--primary)">script.google.com</a> → clique em <strong>"Novo projeto"</strong>.</p>
+        </div>
+
+        <div style="background:#f9fafb;border:1px solid var(--border);border-radius:8px;padding:12px">
+          <div style="font-weight:700;margin-bottom:8px">2. Colar o código abaixo</div>
+          <p style="margin-bottom:8px">Apague todo o conteúdo do editor e cole este código:</p>
+          <div style="position:relative">
+            <pre id="apps-script-code" style="background:#1e293b;color:#e2e8f0;padding:14px;border-radius:8px;font-size:11.5px;overflow-x:auto;white-space:pre;line-height:1.6">const NOME_ARQUIVO = 'rr_automacao_dados.xml';
+
+function doGet(e) {
+  var arquivos = DriveApp.getFilesByName(NOME_ARQUIVO);
+  if (arquivos.hasNext()) {
+    var conteudo = arquivos.next().getBlob().getDataAsString('UTF-8');
+    return ContentService.createTextOutput(conteudo)
+      .setMimeType(ContentService.MimeType.TEXT);
+  }
+  return ContentService.createTextOutput('')
+    .setMimeType(ContentService.MimeType.TEXT);
+}
+
+function doPost(e) {
+  var conteudo = e.postData.contents;
+  var arquivos = DriveApp.getFilesByName(NOME_ARQUIVO);
+  if (arquivos.hasNext()) {
+    arquivos.next().setContent(conteudo);
+  } else {
+    DriveApp.createFile(NOME_ARQUIVO, conteudo, MimeType.PLAIN_TEXT);
+  }
+  return ContentService.createTextOutput('{"status":"ok"}')
+    .setMimeType(ContentService.MimeType.JSON);
+}</pre>
+            <button onclick="navigator.clipboard.writeText(document.getElementById('apps-script-code').textContent).then(()=>toast('Código copiado!'))" style="position:absolute;top:8px;right:8px;background:rgba(255,255,255,.15);color:#e2e8f0;border:none;border-radius:5px;padding:4px 10px;font-size:11px;cursor:pointer">📋 Copiar</button>
+          </div>
+        </div>
+
+        <div style="background:#f9fafb;border:1px solid var(--border);border-radius:8px;padding:12px">
+          <div style="font-weight:700;margin-bottom:6px">3. Publicar como aplicativo web</div>
+          <p>Clique em <strong>Implantar → Nova implantação</strong> → Tipo: <strong>App da Web</strong><br>
+          • Executar como: <strong>Eu (sua conta Google)</strong><br>
+          • Quem pode acessar: <strong>Qualquer pessoa</strong><br>
+          → Clique em <strong>Implantar</strong> → Copie a <strong>URL do aplicativo web</strong>.</p>
+        </div>
+
+        <div style="background:#f9fafb;border:1px solid var(--border);border-radius:8px;padding:12px">
+          <div style="font-weight:700;margin-bottom:6px">4. Colar a URL aqui</div>
+          <input id="drive-url-inp" class="login-inp" type="url"
+            placeholder="https://script.google.com/macros/s/.../exec"
+            value="${cur}"
+            style="margin-top:6px">
+        </div>
+      </div>
+    </div>
+
+    ${cur ? `<div style="background:#d1fae5;border:1px solid #6ee7b7;border-radius:8px;padding:10px 14px;font-size:12px;color:#065f46;margin-bottom:14px">
+      ✅ Drive configurado: <code style="font-size:11px;word-break:break-all">${cur}</code>
+    </div>` : ''}
+  </div>
+  <div class="mfoot" style="flex-wrap:wrap;gap:8px">
+    ${cur ? `<button class="btn btn-danger btn-sm" onclick="if(confirm('Desvincular o Google Drive?')){_clearDriveUrl();closeModal();toast('Drive desvinculado.');}">🗑 Desvincular</button>` : ''}
+    <button class="btn btn-outline" onclick="closeModal()">Fechar</button>
+    <button class="btn btn-outline" onclick="testDriveConnection()">🔍 Testar conexão</button>
+    <button class="btn btn-primary" onclick="saveDriveUrl()">💾 Salvar e conectar</button>
+  </div>`,'modal-lg');
+}
+
+async function saveDriveUrl() {
+  const inp = document.getElementById('drive-url-inp');
+  const url = (inp?.value||'').trim();
+  if (!url) { toast('Cole a URL do Apps Script primeiro.','err'); return; }
+  if (!url.includes('script.google.com') && !url.startsWith('https://')) {
+    toast('URL inválida. Deve ser do script.google.com.','err'); return;
+  }
+  _setDriveUrl(url);
+  toast('Vinculando ao Google Drive…');
+  const ok = await _loadFromDrive();
+  if (ok) {
+    render();
+    toast('✅ Drive vinculado e dados carregados!');
+    closeModal();
+  } else {
+    // Drive vazio ou novo — salva os dados atuais nele
+    await _saveToDrive(_stateToXml());
+    toast('✅ Drive vinculado! Dados enviados para o Drive.');
+    closeModal();
+  }
+}
+
+async function testDriveConnection() {
+  const inp = document.getElementById('drive-url-inp');
+  const url = (inp?.value||'').trim();
+  if (!url) { toast('Cole a URL antes de testar.','err'); return; }
+  toast('Testando conexão…');
+  try {
+    const res = await fetch(url + '?_nc=' + Date.now(), { cache:'no-store' });
+    if (res.ok) { toast('✅ Conexão bem-sucedida!','ok'); }
+    else        { toast(`⚠️ Resposta HTTP ${res.status}. Verifique a URL.`,'err'); }
+  } catch(e) { toast('❌ Falha na conexão: ' + e.message,'err'); }
 }
 
 // ─── abrir arquivo existente ───────────────────
@@ -1665,33 +1842,47 @@ async function _reconnectXml() {
 async function _initApp() {
   _checkSessionExpiry();
   _updateXmlStatus('checking');
+  _updateDriveStatus();
 
-  // Tenta restaurar o handle salvo no IndexedDB
-  const saved = await _restoreHandle();
-  if (saved) {
+  let dataLoaded = false;
+
+  // 1ª prioridade: Google Drive (compartilhado entre usuários)
+  if (_getDriveUrl()) {
     try {
-      const perm = await saved.queryPermission({ mode: 'readwrite' });
-      if (perm === 'granted') {
-        // Permissão já concedida — carrega silenciosamente
-        await _loadHandleData(saved);
-        _xmlHandle = saved;
-        _updateXmlStatus('ok');
-      } else if (perm === 'prompt') {
-        // Precisa de gesto humano — NÃO chamar requestPermission() aqui
-        // Guarda o handle e mostra banner após render()
-        _pendingHandle = saved;
-        _updateXmlStatus('none');
-      } else {
-        // 'denied'
-        await _clearHandle();
+      const ok = await _loadFromDrive();
+      if (ok) {
+        dataLoaded = true;
+        toast('☁️ Dados carregados do Google Drive.', 'ok');
+      }
+    } catch(e) { console.warn('[Drive] Falha no carregamento inicial:', e.message); }
+  }
+
+  // 2ª prioridade: arquivo XML local (se Drive não carregou)
+  if (!dataLoaded) {
+    const saved = await _restoreHandle();
+    if (saved) {
+      try {
+        const perm = await saved.queryPermission({ mode: 'readwrite' });
+        if (perm === 'granted') {
+          await _loadHandleData(saved);
+          _xmlHandle = saved;
+          _updateXmlStatus('ok');
+          dataLoaded = true;
+        } else if (perm === 'prompt') {
+          // Precisa de gesto humano — mostra banner
+          _pendingHandle = saved;
+          _updateXmlStatus('none');
+        } else {
+          await _clearHandle();
+          _updateXmlStatus('none');
+        }
+      } catch(e) {
+        console.warn('[XML] Erro ao verificar handle:', e.message);
         _updateXmlStatus('none');
       }
-    } catch(e) {
-      console.warn('[XML] Erro ao verificar handle:', e.message);
+    } else {
       _updateXmlStatus('none');
     }
-  } else {
-    _updateXmlStatus('none');
   }
 
   render();
